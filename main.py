@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk, ImageEnhance
+from PIL import Image, ImageTk, ImageEnhance, ImageDraw
 Image.MAX_IMAGE_PIXELS = None
 import os
 import cv2
@@ -141,8 +141,18 @@ class PassportPhotoApp(ctk.CTk):
         self.smoothing_slider.grid(row=28, column=0, padx=20, pady=5)
         self.smoothing_slider.set(0)
 
+        # --- STEP 6: EXPORT ---
+        self.export_label = ctk.CTkLabel(self.sidebar_frame, text="6. Export & Print", font=ctk.CTkFont(weight="bold"))
+        self.export_label.grid(row=29, column=0, padx=20, pady=(15, 0), sticky="w")
+
+        self.export_single_btn = ctk.CTkButton(self.sidebar_frame, text="Save Single Photo", command=self.export_single)
+        self.export_single_btn.grid(row=30, column=0, padx=20, pady=5)
+
+        self.export_sheet_btn = ctk.CTkButton(self.sidebar_frame, text="Save 4x6 Print Sheet", fg_color="transparent", border_width=2, command=self.export_print_sheet)
+        self.export_sheet_btn.grid(row=31, column=0, padx=20, pady=5)
+
         # Update expanding row index
-        self.sidebar_frame.grid_rowconfigure(29, weight=1)
+        self.sidebar_frame.grid_rowconfigure(32, weight=1)
 
         # --- MAIN PREVIEW AREA ---
         self.preview_frame = ctk.CTkFrame(self)
@@ -357,6 +367,123 @@ class PassportPhotoApp(ctk.CTk):
             if self._adj_timer:
                 self.after_cancel(self._adj_timer)
             self._adj_timer = self.after(50, self.apply_mask)
+
+    def get_physical_size_mm(self):
+        val = self.size_optionemenu.get()
+        if "2x2" in val: return (50.8, 50.8) # 2 inches in mm
+        if "35x45" in val: return (35.0, 45.0)
+        if "35x35" in val: return (35.0, 35.0)
+        # For custom, we don't have a physical standard, fallback to 35x45
+        return (35.0, 45.0)
+
+    def get_standardized_photo(self, target_w_mm, target_h_mm):
+        if not self.original_image: return None
+        
+        # 1. First, center crop self.original_image to the exact target aspect ratio
+        target_ratio = target_w_mm / target_h_mm
+        img_w, img_h = self.original_image.size
+        img_ratio = img_w / img_h
+        
+        if img_ratio > target_ratio:
+            # Image is too wide
+            new_w = img_h * target_ratio
+            left = (img_w - new_w) / 2
+            temp_img = self.original_image.crop((left, 0, left + new_w, img_h))
+        else:
+            # Image is too tall
+            new_h = img_w / target_ratio
+            top = (img_h - new_h) / 2
+            temp_img = self.original_image.crop((0, top, img_w, top + new_h))
+            
+        # 2. Resize to 300 DPI pixel dimensions
+        w_px = int((target_w_mm / 25.4) * 300)
+        h_px = int((target_h_mm / 25.4) * 300)
+        
+        return temp_img.resize((w_px, h_px), Image.Resampling.LANCZOS)
+
+    def export_single(self):
+        if not self.original_image: return
+        
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".jpg",
+            filetypes=[("JPEG", "*.jpg"), ("PNG", "*.png")],
+            initialfile="passport_photo.jpg"
+        )
+        
+        if file_path:
+            w_mm, h_mm = self.get_physical_size_mm()
+            final_img = self.get_standardized_photo(w_mm, h_mm)
+            
+            # Save with 300 DPI metadata
+            final_img.save(file_path, dpi=(300, 300), quality=95, subsampling=0)
+
+    def export_print_sheet(self):
+        if not self.original_image: return
+        
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".jpg",
+            filetypes=[("JPEG", "*.jpg")],
+            initialfile="print_sheet_4x6.jpg"
+        )
+        
+        if file_path:
+            # 4x6 inch sheet at 300 DPI = 1800x1200 pixels
+            sheet_w, sheet_h = 1800, 1200 
+            
+            w_mm, h_mm = self.get_physical_size_mm()
+            photo_w = int((w_mm / 25.4) * 300)
+            photo_h = int((h_mm / 25.4) * 300)
+            
+            # Optimization: Use very small margins/gaps to ensure we fit standard grids
+            margin = 15
+            gap = 15
+            
+            # Special case for 2x2" (600px): force zero margins to fit exactly 3 columns
+            if photo_w >= 600 or photo_h >= 600:
+                margin = 0
+                gap = 0
+            
+            def calc_fit(sw, sh, pw, ph, m, g):
+                c = (sw - 2*m + g) // (pw + g)
+                r = (sh - 2*m + g) // (ph + g)
+                return int(max(0, c)), int(max(0, r))
+
+            # Try landscape sheet with both orientations of individual photos
+            c1, r1 = calc_fit(sheet_w, sheet_h, photo_w, photo_h, margin, gap)
+            c2, r2 = calc_fit(sheet_w, sheet_h, photo_h, photo_w, margin, gap)
+            
+            if (c2 * r2) > (c1 * r1):
+                num_cols, num_rows = c2, r2
+                final_p_w, final_p_h = photo_h, photo_w
+                rotate_photo = True
+            else:
+                num_cols, num_rows = c1, r1
+                final_p_w, final_p_h = photo_w, photo_h
+                rotate_photo = False
+            
+            # Get correctly sized photo
+            photo = self.get_standardized_photo(w_mm, h_mm)
+            if rotate_photo:
+                photo = photo.rotate(90, expand=True)
+            
+            sheet = Image.new("RGB", (sheet_w, sheet_h), "WHITE")
+            draw = ImageDraw.Draw(sheet)
+            
+            # Center the grid
+            grid_w = num_cols * final_p_w + (num_cols - 1) * gap
+            grid_h = num_rows * final_p_h + (num_rows - 1) * gap
+            start_x = (sheet_w - grid_w) // 2
+            start_y = (sheet_h - grid_h) // 2
+            
+            for r in range(num_rows):
+                for c in range(num_cols):
+                    x = start_x + c * (final_p_w + gap)
+                    y = start_y + r * (final_p_h + gap)
+                    sheet.paste(photo, (x, y))
+                    # Cutting guides
+                    draw.rectangle([x, y, x + final_p_w, y + final_p_h], outline="#dddddd")
+                
+            sheet.save(file_path, dpi=(300, 300), quality=98)
 
     def confirm_crop(self):
         if not self.original_image:
