@@ -1,5 +1,5 @@
 customtkinter
-rembg[u2netp]
+rembg[cpu]
 mediapipe
 pillow
 opencv-python

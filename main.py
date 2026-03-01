@@ -6,6 +6,7 @@ Image.MAX_IMAGE_PIXELS = None
 import os
 import cv2
 import numpy as np
+from rembg import remove
 
 class PassportPhotoApp(ctk.CTk):
     def __init__(self):
@@ -54,7 +55,7 @@ class PassportPhotoApp(ctk.CTk):
         self.auto_crop_button = ctk.CTkButton(self.sidebar_frame, text="Auto-Crop Face", command=self.auto_crop_face)
         self.auto_crop_button.grid(row=7, column=0, padx=20, pady=5)
         
-        self.remove_bg_button = ctk.CTkButton(self.sidebar_frame, text="Remove Background", fg_color="transparent", border_width=2)
+        self.remove_bg_button = ctk.CTkButton(self.sidebar_frame, text="Remove Background", fg_color="transparent", border_width=2, command=self.remove_background)
         self.remove_bg_button.grid(row=8, column=0, padx=20, pady=5)
 
         # --- STEP 4: REFINEMENT ---
@@ -113,6 +114,33 @@ class PassportPhotoApp(ctk.CTk):
             self.original_image = self.original_image.rotate(-90, expand=True)
             self.init_crop_box()
             self.update_preview()
+
+    def remove_background(self):
+        if not self.original_image:
+            return
+            
+        self.remove_bg_button.configure(state="disabled", text="Processing...")
+        self.update_idletasks() # Force UI update before heavy operation
+
+        try:
+            # rembg returns an RGBA image
+            output_rgba = remove(self.original_image)
+            
+            # Passport photos usually have a solid background (white by default)
+            # Create a white background image of the same size
+            white_bg = Image.new("RGBA", output_rgba.size, "WHITE")
+            
+            # Paste the cutout onto the white background using the cutout's alpha channel as a mask
+            white_bg.paste(output_rgba, (0, 0), output_rgba)
+            
+            # Convert back to RGB
+            self.original_image = white_bg.convert("RGB")
+            
+            self.update_preview()
+        except Exception as e:
+            print(f"Error removing background: {e}")
+        finally:
+            self.remove_bg_button.configure(state="normal", text="Remove Background")
 
     def auto_crop_face(self):
         if not self.original_image:
