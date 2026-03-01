@@ -103,9 +103,46 @@ class PassportPhotoApp(ctk.CTk):
         self.brightness_label = ctk.CTkLabel(self.sidebar_frame, text="Foreground Brightness:")
         self.brightness_label.grid(row=16, column=0, padx=20, pady=(5,0), sticky="w")
 
-        self.brightness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.5, to=1.5, number_of_steps=100, command=self.on_brightness_change)
-        self.brightness_slider.grid(row=17, column=0, padx=20, pady=10)
+        self.brightness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.5, to=1.5, number_of_steps=100, command=self.on_adjustment_change)
+        self.brightness_slider.grid(row=17, column=0, padx=20, pady=5)
         self.brightness_slider.set(1.0)
+
+        # --- STEP 5: IMAGE ADJUSTMENTS ---
+        self.adjust_label = ctk.CTkLabel(self.sidebar_frame, text="5. Image Adjustments", font=ctk.CTkFont(weight="bold"))
+        self.adjust_label.grid(row=18, column=0, padx=20, pady=(15, 0), sticky="w")
+
+        self.contrast_label = ctk.CTkLabel(self.sidebar_frame, text="Contrast:")
+        self.contrast_label.grid(row=19, column=0, padx=20, pady=(5,0), sticky="w")
+        self.contrast_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.5, to=1.5, number_of_steps=100, command=self.on_adjustment_change)
+        self.contrast_slider.grid(row=20, column=0, padx=20, pady=5)
+        self.contrast_slider.set(1.0)
+
+        self.saturation_label = ctk.CTkLabel(self.sidebar_frame, text="Saturation:")
+        self.saturation_label.grid(row=21, column=0, padx=20, pady=(5,0), sticky="w")
+        self.saturation_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.0, to=2.0, number_of_steps=100, command=self.on_adjustment_change)
+        self.saturation_slider.grid(row=22, column=0, padx=20, pady=5)
+        self.saturation_slider.set(1.0)
+
+        self.sharpness_label = ctk.CTkLabel(self.sidebar_frame, text="Sharpness:")
+        self.sharpness_label.grid(row=23, column=0, padx=20, pady=(5,0), sticky="w")
+        self.sharpness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.0, to=3.0, number_of_steps=100, command=self.on_adjustment_change)
+        self.sharpness_slider.grid(row=24, column=0, padx=20, pady=5)
+        self.sharpness_slider.set(1.0)
+
+        self.lightening_label = ctk.CTkLabel(self.sidebar_frame, text="Skin Lightening:")
+        self.lightening_label.grid(row=25, column=0, padx=20, pady=(5,0), sticky="w")
+        self.lightening_slider = ctk.CTkSlider(self.sidebar_frame, from_=0, to=1.0, number_of_steps=100, command=self.on_adjustment_change)
+        self.lightening_slider.grid(row=26, column=0, padx=20, pady=5)
+        self.lightening_slider.set(0)
+
+        self.smoothing_label = ctk.CTkLabel(self.sidebar_frame, text="Skin Smoothing:")
+        self.smoothing_label.grid(row=27, column=0, padx=20, pady=(5,0), sticky="w")
+        self.smoothing_slider = ctk.CTkSlider(self.sidebar_frame, from_=0, to=1.0, number_of_steps=100, command=self.on_adjustment_change)
+        self.smoothing_slider.grid(row=28, column=0, padx=20, pady=5)
+        self.smoothing_slider.set(0)
+
+        # Update expanding row index
+        self.sidebar_frame.grid_rowconfigure(29, weight=1)
 
         # --- MAIN PREVIEW AREA ---
         self.preview_frame = ctk.CTkFrame(self)
@@ -151,6 +188,9 @@ class PassportPhotoApp(ctk.CTk):
         self.drag_start_norm = [0, 0, 0, 0]
         self.handle_size = 10
         self._resize_timer = None
+        self._brightness_timer = None
+        self._bg_color_timer = None
+        self._adj_timer = None
         
         self.set_mode("crop") # Initialize UI states
 
@@ -227,10 +267,57 @@ class PassportPhotoApp(ctk.CTk):
 
     def apply_mask(self):
         if self.image_before_bg_removal and self.current_mask:
-            # Apply brightness to the foreground first
-            brightness_factor = self.brightness_slider.get()
-            enhancer = ImageEnhance.Brightness(self.image_before_bg_removal)
-            fg_image = enhancer.enhance(brightness_factor)
+            # 1. Apply Skin Smoothing (OpenCV Bilateral Filter)
+            smooth_val = self.smoothing_slider.get() # 0 to 1.0
+            if smooth_val > 0:
+                # Convert to numpy array for OpenCV
+                img_np = np.array(self.image_before_bg_removal)
+                # Reduced max smoothing and more fine-grained scaling
+                d = int(smooth_val * 10) + 1
+                sigma = smooth_val * 40
+                img_np = cv2.bilateralFilter(img_np, d, sigma, sigma)
+                processed_fg = Image.fromarray(img_np)
+            else:
+                processed_fg = self.image_before_bg_removal.copy()
+
+            # 2. Skin Lightening
+            light_val = self.lightening_slider.get() # 0 to 1.0
+            if light_val > 0:
+                img_np = np.array(processed_fg)
+                img_ycrcb = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
+                # Skin color range in YCrCb
+                lower = np.array([0, 133, 77], dtype=np.uint8)
+                upper = np.array([255, 173, 127], dtype=np.uint8)
+                skin_mask = cv2.inRange(img_ycrcb, lower, upper)
+                # Soften the mask edges
+                skin_mask = cv2.GaussianBlur(skin_mask, (7, 7), 0) / 255.0
+                
+                # Boost Y channel (brightness) selectively
+                # Max boost of ~25%
+                boost = 1.0 + (light_val * 0.25)
+                img_ycrcb = img_ycrcb.astype(float)
+                img_ycrcb[:,:,0] = img_ycrcb[:,:,0] * (1.0 + (boost - 1.0) * skin_mask)
+                img_ycrcb[:,:,0] = np.clip(img_ycrcb[:,:,0], 0, 255)
+                
+                img_np = cv2.cvtColor(img_ycrcb.astype(np.uint8), cv2.COLOR_YCrCb2RGB)
+                processed_fg = Image.fromarray(img_np)
+
+            # 3. Apply PIL Enhancements
+            # Brightness
+            enhancer = ImageEnhance.Brightness(processed_fg)
+            processed_fg = enhancer.enhance(self.brightness_slider.get())
+            
+            # Contrast
+            enhancer = ImageEnhance.Contrast(processed_fg)
+            processed_fg = enhancer.enhance(self.contrast_slider.get())
+            
+            # Saturation (Color)
+            enhancer = ImageEnhance.Color(processed_fg)
+            processed_fg = enhancer.enhance(self.saturation_slider.get())
+            
+            # Sharpness
+            enhancer = ImageEnhance.Sharpness(processed_fg)
+            processed_fg = enhancer.enhance(self.sharpness_slider.get())
             
             if self.mode in ["brush", "eraser"]:
                 # Show an overlay: removed background is darkened and tinted red slightly
@@ -240,7 +327,7 @@ class PassportPhotoApp(ctk.CTk):
                 overlay_bg = Image.alpha_composite(overlay_bg, red_layer).convert("RGB")
                 
                 # Composite the unmasked part over the overlay
-                self.original_image = Image.composite(fg_image, overlay_bg, self.current_mask)
+                self.original_image = Image.composite(processed_fg, overlay_bg, self.current_mask)
             else:
                 # Normal solid background based on selection
                 color_name = self.bg_color_optionemenu.get()
@@ -257,24 +344,19 @@ class PassportPhotoApp(ctk.CTk):
                     bg_color = "#D2B48C"
                     
                 solid_bg = Image.new("RGB", self.image_before_bg_removal.size, bg_color)
-                self.original_image = Image.composite(fg_image, solid_bg, self.current_mask)
+                self.original_image = Image.composite(processed_fg, solid_bg, self.current_mask)
             self.update_preview()
 
     def on_bg_color_change(self, choice):
         if self.image_before_bg_removal and self.current_mask:
             self.apply_mask()
 
-    def on_brightness_change(self, value):
+    def on_adjustment_change(self, value):
         if self.image_before_bg_removal and self.current_mask:
-            # Throttle the brightness update to keep the slider responsive
-            if hasattr(self, '_brightness_timer') and self._brightness_timer:
-                self.after_cancel(self._brightness_timer)
-            self._brightness_timer = self.after(50, self.apply_mask)
-        if self.image_before_bg_removal and self.current_mask:
-            # Throttle the brightness update to keep the slider responsive
-            if hasattr(self, '_brightness_timer') and self._brightness_timer:
-                self.after_cancel(self._brightness_timer)
-            self._brightness_timer = self.after(50, self.apply_mask)
+            # Throttle the updates to keep the sliders responsive
+            if self._adj_timer:
+                self.after_cancel(self._adj_timer)
+            self._adj_timer = self.after(50, self.apply_mask)
 
     def confirm_crop(self):
         if not self.original_image:
