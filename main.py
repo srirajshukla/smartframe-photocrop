@@ -4,6 +4,8 @@ from tkinter import filedialog
 from PIL import Image, ImageTk
 Image.MAX_IMAGE_PIXELS = None
 import os
+import cv2
+import numpy as np
 
 class PassportPhotoApp(ctk.CTk):
     def __init__(self):
@@ -49,7 +51,7 @@ class PassportPhotoApp(ctk.CTk):
         self.ai_label = ctk.CTkLabel(self.sidebar_frame, text="3. AI Processing", font=ctk.CTkFont(weight="bold"))
         self.ai_label.grid(row=6, column=0, padx=20, pady=(10, 0), sticky="w")
         
-        self.auto_crop_button = ctk.CTkButton(self.sidebar_frame, text="Auto-Crop Face")
+        self.auto_crop_button = ctk.CTkButton(self.sidebar_frame, text="Auto-Crop Face", command=self.auto_crop_face)
         self.auto_crop_button.grid(row=7, column=0, padx=20, pady=5)
         
         self.remove_bg_button = ctk.CTkButton(self.sidebar_frame, text="Remove Background", fg_color="transparent", border_width=2)
@@ -111,6 +113,108 @@ class PassportPhotoApp(ctk.CTk):
             self.original_image = self.original_image.rotate(-90, expand=True)
             self.init_crop_box()
             self.update_preview()
+
+    def auto_crop_face(self):
+        if not self.original_image:
+            return
+
+        # Convert PIL image to numpy array for OpenCV
+        img_rgb = self.original_image.convert("RGB")
+        image_arr = np.array(img_rgb)
+        
+        # Convert RGB to BGR (OpenCV format) and then to Grayscale
+        img_bgr = cv2.cvtColor(image_arr, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        
+        # Load the pre-trained Haar cascade for frontal face
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        
+        # Detect faces
+        faces = face_cascade.detectMultiScale(
+            gray, 
+            scaleFactor=1.1, 
+            minNeighbors=5, 
+            minSize=(100, 100)
+        )
+        
+        if len(faces) == 0:
+            print("No face detected.")
+            return
+            
+        # Get the largest face by area
+        x, y, w_face, h_face = max(faces, key=lambda rect: rect[2] * rect[3])
+        
+        img_h, img_w = image_arr.shape[:2]
+        
+        # Normalized bounding box
+        fx = x / img_w
+        fy = y / img_h
+        fw = w_face / img_w
+        fh = h_face / img_h
+        
+        # Passport photo logic: face usually occupies 50-60% of the image height.
+        target_face_height_ratio = 0.55
+        
+        crop_h = fh / target_face_height_ratio
+        
+        ratio = self.get_aspect_ratio()
+        if ratio:
+            crop_w = crop_h * ratio
+        else:
+            crop_w = crop_h * 0.8  # fallback ratio
+            
+        # Calculate top left corner to center the face
+        face_cx = fx + fw / 2.0
+        face_cy = fy + fh / 2.0
+        
+        # In a passport photo, the face center is usually slightly above the vertical center
+        # e.g., face center is at 45% of the total height from the top
+        crop_cx = face_cx
+        crop_cy = face_cy + (crop_h * 0.05) 
+        
+        nx1 = crop_cx - crop_w / 2.0
+        nx2 = crop_cx + crop_w / 2.0
+        ny1 = crop_cy - crop_h / 2.0
+        ny2 = crop_cy + crop_h / 2.0
+        
+        # Clamp to image boundaries
+        if nx1 < 0:
+            nx2 -= nx1
+            nx1 = 0
+        if ny1 < 0:
+            ny2 -= ny1
+            ny1 = 0
+        if nx2 > 1.0:
+            nx1 -= (nx2 - 1.0)
+            nx2 = 1.0
+        if ny2 > 1.0:
+            ny1 -= (ny2 - 1.0)
+            ny2 = 1.0
+            
+        # Final clamp just in case
+        nx1 = max(0.0, nx1)
+        ny1 = max(0.0, ny1)
+        nx2 = min(1.0, nx2)
+        ny2 = min(1.0, ny2)
+        
+        # If after clamping the aspect ratio is destroyed, we re-enforce it
+        if ratio:
+            curr_w_px = (nx2 - nx1) * img_w
+            curr_h_px = (ny2 - ny1) * img_h
+            if curr_h_px > 0:
+                curr_ratio = curr_w_px / curr_h_px
+                if abs(curr_ratio - ratio) > 0.01:
+                    new_w_px = curr_h_px * ratio
+                    nx2 = nx1 + new_w_px / img_w
+                    if nx2 > 1.0: 
+                        nx2 = 1.0
+                        new_w_px = (nx2 - nx1) * img_w
+                        new_h_px = new_w_px / ratio
+                        ny2 = ny1 + new_h_px / img_h
+        
+        self.crop_norm = [nx1, ny1, nx2, ny2]
+        self.update_preview()
 
     def on_format_change(self, choice):
         if self.original_image:
