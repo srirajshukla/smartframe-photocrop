@@ -16,6 +16,13 @@ BG_COLORS = {
     "Tan": "#D2B48C"
 }
 
+# Segmentation Models (Name: internal_id)
+SEGMENTATION_MODELS = {
+    "Fast (u2netp)": "u2netp",
+    "Balanced (u2net)": "u2net",
+    "High Quality (isnet)": "isnet-general-use"
+}
+
 # UI Defaults
 DEFAULT_GEOMETRY = "1100x700"
 SIDEBAR_WIDTH = 250

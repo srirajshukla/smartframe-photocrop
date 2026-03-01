@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from utils.constants import SIZE_PRESETS, BG_COLORS
+from utils.constants import SIZE_PRESETS, BG_COLORS, SEGMENTATION_MODELS
 
 class Sidebar(ctk.CTkFrame):
     def __init__(self, master, app, **kwargs):
@@ -41,6 +41,12 @@ class Sidebar(ctk.CTkFrame):
     def setup_bg_tab(self):
         f = self.tab_bg
         self.add_section_label(f, "AI Background")
+        
+        ctk.CTkLabel(f, text="Model Quality:").pack(anchor="w", padx=10, pady=(5,0))
+        self.app.model_optionemenu = ctk.CTkOptionMenu(f, values=list(SEGMENTATION_MODELS.keys()))
+        self.app.model_optionemenu.set("Balanced (u2net)")
+        self.app.model_optionemenu.pack(fill="x", padx=10, pady=5)
+
         self.app.remove_bg_btn = self.add_btn(f, "Remove Background", self.app.remove_background, fg_color="#e67e22")
         
         self.add_section_label(f, "Refine Mask")

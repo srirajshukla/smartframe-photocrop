@@ -26,9 +26,11 @@ class ImageEngine:
         return [x/img_w, y/img_h, w/img_w, h/img_h]
 
     @staticmethod
-    def remove_bg(pil_image):
+    def remove_bg(pil_image, model_name="u2net"):
         """Removes background using rembg and returns (RGBA image, Alpha mask)."""
-        output_rgba = remove(pil_image)
+        from rembg import new_session
+        session = new_session(model_name)
+        output_rgba = remove(pil_image, session=session)
         mask = output_rgba.split()[3]
         return output_rgba, mask
 

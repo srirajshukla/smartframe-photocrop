@@ -4,7 +4,7 @@ from tkinter import filedialog
 from PIL import Image, ImageDraw
 import numpy as np
 
-from utils.constants import SIZE_PRESETS, BG_COLORS, DEFAULT_GEOMETRY
+from utils.constants import SIZE_PRESETS, BG_COLORS, DEFAULT_GEOMETRY, SEGMENTATION_MODELS
 from core.image_engine import ImageEngine
 from core.exporter import Exporter
 from ui.sidebar import Sidebar
@@ -78,7 +78,12 @@ class PassportPhotoApp(ctk.CTk):
         self.update_idletasks()
         try:
             self.image_before_bg_removal = self.original_image.copy()
-            _, self.current_mask = ImageEngine.remove_bg(self.original_image)
+            
+            # Get the internal model id from the selected display name
+            model_display_name = self.model_optionemenu.get()
+            model_id = SEGMENTATION_MODELS.get(model_display_name, "u2net")
+            
+            _, self.current_mask = ImageEngine.remove_bg(self.original_image, model_name=model_id)
             self.apply_mask()
             # Switch to BG tab for refinement
             self.sidebar.tabs.set("2. BG")
@@ -287,3 +292,7 @@ class PassportPhotoApp(ctk.CTk):
         if path:
             w, h = SIZE_PRESETS.get(self.size_optionemenu.get())
             Exporter.generate_print_sheet(self.original_image, w, h).save(path, dpi=(300,300), quality=98)
+
+if __name__ == "__main__":
+    app = PassportPhotoApp()
+    app.mainloop()
