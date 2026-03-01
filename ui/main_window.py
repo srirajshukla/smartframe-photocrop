@@ -80,6 +80,8 @@ class PassportPhotoApp(ctk.CTk):
             self.image_before_bg_removal = self.original_image.copy()
             _, self.current_mask = ImageEngine.remove_bg(self.original_image)
             self.apply_mask()
+            # Switch to BG tab for refinement
+            self.sidebar.tabs.set("2. BG")
         finally:
             self.remove_bg_btn.configure(state="normal", text="Remove Background")
 
@@ -130,6 +132,16 @@ class PassportPhotoApp(ctk.CTk):
         self.mask_undo_stack.clear()
         self.mask_redo_stack.clear()
         self.update_preview()
+
+    def reset_adjustments(self):
+        # Reset slider values to defaults
+        self.brightness_slider.set(1.0)
+        self.contrast_slider.set(1.0)
+        self.saturation_slider.set(1.0)
+        self.sharpness_slider.set(1.0)
+        self.lightening_slider.set(0.0)
+        self.smoothing_slider.set(0.0)
+        self.apply_mask()
 
     # --- UI EVENT HANDLERS ---
     def on_format_change(self, _):
