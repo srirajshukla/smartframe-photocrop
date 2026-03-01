@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageEnhance
 Image.MAX_IMAGE_PIXELS = None
 import os
 import cv2
@@ -19,10 +19,12 @@ class PassportPhotoApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar Frame
-        self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
+        # Sidebar Frame (Scrollable to accommodate all tools)
+        self.sidebar_frame = ctk.CTkScrollableFrame(self, width=250, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(10, weight=1)
+        
+        # Row 19 will be the expanding row instead of 10 to keep things pushed up
+        self.sidebar_frame.grid_rowconfigure(19, weight=1)
 
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Passport Photo", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
@@ -88,11 +90,21 @@ class PassportPhotoApp(ctk.CTk):
         self.brush_size_slider.grid(row=13, column=0, padx=20, pady=5)
         self.brush_size_slider.set(20)
         
-        self.brightness_label = ctk.CTkLabel(self.sidebar_frame, text="Brightness:")
-        self.brightness_label.grid(row=14, column=0, padx=20, pady=(5,0), sticky="w")
+        self.bg_color_label = ctk.CTkLabel(self.sidebar_frame, text="Background Color:")
+        self.bg_color_label.grid(row=14, column=0, padx=20, pady=(5,0), sticky="w")
+        
+        self.bg_color_optionemenu = ctk.CTkOptionMenu(
+            self.sidebar_frame, 
+            values=["White", "Light Blue", "Grey", "Dark Blue", "Red", "Tan"],
+            command=self.on_bg_color_change
+        )
+        self.bg_color_optionemenu.grid(row=15, column=0, padx=20, pady=5)
+        
+        self.brightness_label = ctk.CTkLabel(self.sidebar_frame, text="Foreground Brightness:")
+        self.brightness_label.grid(row=16, column=0, padx=20, pady=(5,0), sticky="w")
 
-        self.brightness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0, to=2, number_of_steps=100)
-        self.brightness_slider.grid(row=15, column=0, padx=20, pady=10)
+        self.brightness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0.5, to=1.5, number_of_steps=100, command=self.on_brightness_change)
+        self.brightness_slider.grid(row=17, column=0, padx=20, pady=10)
         self.brightness_slider.set(1.0)
 
         # --- MAIN PREVIEW AREA ---
@@ -215,6 +227,11 @@ class PassportPhotoApp(ctk.CTk):
 
     def apply_mask(self):
         if self.image_before_bg_removal and self.current_mask:
+            # Apply brightness to the foreground first
+            brightness_factor = self.brightness_slider.get()
+            enhancer = ImageEnhance.Brightness(self.image_before_bg_removal)
+            fg_image = enhancer.enhance(brightness_factor)
+            
             if self.mode in ["brush", "eraser"]:
                 # Show an overlay: removed background is darkened and tinted red slightly
                 overlay_bg = self.image_before_bg_removal.copy().convert("RGBA")
@@ -223,12 +240,41 @@ class PassportPhotoApp(ctk.CTk):
                 overlay_bg = Image.alpha_composite(overlay_bg, red_layer).convert("RGB")
                 
                 # Composite the unmasked part over the overlay
-                self.original_image = Image.composite(self.image_before_bg_removal, overlay_bg, self.current_mask)
+                self.original_image = Image.composite(fg_image, overlay_bg, self.current_mask)
             else:
-                # Normal solid white background
-                white_bg = Image.new("RGB", self.image_before_bg_removal.size, "WHITE")
-                self.original_image = Image.composite(self.image_before_bg_removal, white_bg, self.current_mask)
+                # Normal solid background based on selection
+                color_name = self.bg_color_optionemenu.get()
+                bg_color = "WHITE"
+                if color_name == "Light Blue":
+                    bg_color = "#ADD8E6"
+                elif color_name == "Grey":
+                    bg_color = "#808080"
+                elif color_name == "Dark Blue":
+                    bg_color = "#00008B"
+                elif color_name == "Red":
+                    bg_color = "#FF0000"
+                elif color_name == "Tan":
+                    bg_color = "#D2B48C"
+                    
+                solid_bg = Image.new("RGB", self.image_before_bg_removal.size, bg_color)
+                self.original_image = Image.composite(fg_image, solid_bg, self.current_mask)
             self.update_preview()
+
+    def on_bg_color_change(self, choice):
+        if self.image_before_bg_removal and self.current_mask:
+            self.apply_mask()
+
+    def on_brightness_change(self, value):
+        if self.image_before_bg_removal and self.current_mask:
+            # Throttle the brightness update to keep the slider responsive
+            if hasattr(self, '_brightness_timer') and self._brightness_timer:
+                self.after_cancel(self._brightness_timer)
+            self._brightness_timer = self.after(50, self.apply_mask)
+        if self.image_before_bg_removal and self.current_mask:
+            # Throttle the brightness update to keep the slider responsive
+            if hasattr(self, '_brightness_timer') and self._brightness_timer:
+                self.after_cancel(self._brightness_timer)
+            self._brightness_timer = self.after(50, self.apply_mask)
 
     def confirm_crop(self):
         if not self.original_image:
