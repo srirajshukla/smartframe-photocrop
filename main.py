@@ -57,13 +57,42 @@ class PassportPhotoApp(ctk.CTk):
         
         self.remove_bg_button = ctk.CTkButton(self.sidebar_frame, text="Remove Background", fg_color="transparent", border_width=2, command=self.remove_background)
         self.remove_bg_button.grid(row=8, column=0, padx=20, pady=5)
+        
+        self.confirm_button = ctk.CTkButton(self.sidebar_frame, text="Confirm Crop", fg_color="#2ecc71", hover_color="#27ae60", command=self.confirm_crop)
+        self.confirm_button.grid(row=9, column=0, padx=20, pady=(5, 10))
 
         # --- STEP 4: REFINEMENT ---
-        self.refine_label = ctk.CTkLabel(self.sidebar_frame, text="4. Refinement", font=ctk.CTkFont(weight="bold"))
-        self.refine_label.grid(row=9, column=0, padx=20, pady=(10, 0), sticky="w")
+        self.refine_label = ctk.CTkLabel(self.sidebar_frame, text="4. Mask Refinement", font=ctk.CTkFont(weight="bold"))
+        self.refine_label.grid(row=10, column=0, padx=20, pady=(10, 0), sticky="w")
         
+        self.tool_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        self.tool_frame.grid(row=11, column=0, padx=20, pady=5, sticky="ew")
+        self.tool_frame.grid_columnconfigure((0,1,2,3), weight=1)
+        
+        self.brush_btn = ctk.CTkButton(self.tool_frame, text="Brush", width=50, command=lambda: self.toggle_mode("brush"))
+        self.brush_btn.grid(row=0, column=0, padx=2)
+        
+        self.eraser_btn = ctk.CTkButton(self.tool_frame, text="Eraser", width=50, command=lambda: self.toggle_mode("eraser"))
+        self.eraser_btn.grid(row=0, column=1, padx=2)
+        
+        self.undo_btn = ctk.CTkButton(self.tool_frame, text="Undo", width=50, command=self.undo_mask)
+        self.undo_btn.grid(row=0, column=2, padx=2)
+        
+        self.redo_btn = ctk.CTkButton(self.tool_frame, text="Redo", width=50, command=self.redo_mask)
+        self.redo_btn.grid(row=0, column=3, padx=2)
+
+        self.brush_size_label = ctk.CTkLabel(self.sidebar_frame, text="Brush Size:")
+        self.brush_size_label.grid(row=12, column=0, padx=20, pady=(5,0), sticky="w")
+        
+        self.brush_size_slider = ctk.CTkSlider(self.sidebar_frame, from_=5, to=100)
+        self.brush_size_slider.grid(row=13, column=0, padx=20, pady=5)
+        self.brush_size_slider.set(20)
+        
+        self.brightness_label = ctk.CTkLabel(self.sidebar_frame, text="Brightness:")
+        self.brightness_label.grid(row=14, column=0, padx=20, pady=(5,0), sticky="w")
+
         self.brightness_slider = ctk.CTkSlider(self.sidebar_frame, from_=0, to=2, number_of_steps=100)
-        self.brightness_slider.grid(row=10, column=0, padx=20, pady=10)
+        self.brightness_slider.grid(row=15, column=0, padx=20, pady=10)
         self.brightness_slider.set(1.0)
 
         # --- MAIN PREVIEW AREA ---
@@ -87,6 +116,15 @@ class PassportPhotoApp(ctk.CTk):
         self.tk_image = None
         self.preview_scale = 1.0
         
+        # Masking Variables
+        self.mode = "crop" # 'crop', 'brush', 'eraser'
+        self.image_before_bg_removal = None
+        self.current_mask = None
+        self.mask_undo_stack = []
+        self.mask_redo_stack = []
+        self.last_paint_x = None
+        self.last_paint_y = None
+        
         # Image placement on canvas
         self.img_x = 0
         self.img_y = 0
@@ -101,6 +139,43 @@ class PassportPhotoApp(ctk.CTk):
         self.drag_start_norm = [0, 0, 0, 0]
         self.handle_size = 10
         self._resize_timer = None
+        
+        self.set_mode("crop") # Initialize UI states
+
+    def set_mode(self, mode):
+        self.mode = mode
+        # Update button colors to indicate active mode
+        active_color = "#1f538d" # Default CTk active blue
+        inactive_color = "gray30"
+        
+        self.brush_btn.configure(fg_color=active_color if mode == "brush" else inactive_color)
+        self.eraser_btn.configure(fg_color=active_color if mode == "eraser" else inactive_color)
+        
+        if mode in ["brush", "eraser"]:
+            self.canvas.config(cursor="crosshair")
+        else:
+            self.canvas.config(cursor="arrow")
+            
+        self.draw_crop_box()
+        self.apply_mask()
+
+    def toggle_mode(self, mode):
+        if self.mode == mode:
+            self.set_mode("crop") # Toggle off back to crop
+        else:
+            self.set_mode(mode)
+
+    def undo_mask(self):
+        if self.mask_undo_stack and self.current_mask:
+            self.mask_redo_stack.append(self.current_mask.copy())
+            self.current_mask = self.mask_undo_stack.pop()
+            self.apply_mask()
+
+    def redo_mask(self):
+        if self.mask_redo_stack and self.current_mask:
+            self.mask_undo_stack.append(self.current_mask.copy())
+            self.current_mask = self.mask_redo_stack.pop()
+            self.apply_mask()
 
     def open_image(self):
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.webp")])
@@ -123,24 +198,65 @@ class PassportPhotoApp(ctk.CTk):
         self.update_idletasks() # Force UI update before heavy operation
 
         try:
+            # Save original for mask editing
+            self.image_before_bg_removal = self.original_image.copy()
+            
             # rembg returns an RGBA image
             output_rgba = remove(self.original_image)
             
-            # Passport photos usually have a solid background (white by default)
-            # Create a white background image of the same size
-            white_bg = Image.new("RGBA", output_rgba.size, "WHITE")
+            # Extract alpha channel as the mask
+            self.current_mask = output_rgba.split()[3]
             
-            # Paste the cutout onto the white background using the cutout's alpha channel as a mask
-            white_bg.paste(output_rgba, (0, 0), output_rgba)
-            
-            # Convert back to RGB
-            self.original_image = white_bg.convert("RGB")
-            
-            self.update_preview()
+            self.apply_mask()
         except Exception as e:
             print(f"Error removing background: {e}")
         finally:
             self.remove_bg_button.configure(state="normal", text="Remove Background")
+
+    def apply_mask(self):
+        if self.image_before_bg_removal and self.current_mask:
+            if self.mode in ["brush", "eraser"]:
+                # Show an overlay: removed background is darkened and tinted red slightly
+                overlay_bg = self.image_before_bg_removal.copy().convert("RGBA")
+                # Create a dark red overlay
+                red_layer = Image.new("RGBA", overlay_bg.size, (255, 0, 0, 80))
+                overlay_bg = Image.alpha_composite(overlay_bg, red_layer).convert("RGB")
+                
+                # Composite the unmasked part over the overlay
+                self.original_image = Image.composite(self.image_before_bg_removal, overlay_bg, self.current_mask)
+            else:
+                # Normal solid white background
+                white_bg = Image.new("RGB", self.image_before_bg_removal.size, "WHITE")
+                self.original_image = Image.composite(self.image_before_bg_removal, white_bg, self.current_mask)
+            self.update_preview()
+
+    def confirm_crop(self):
+        if not self.original_image:
+            return
+            
+        w, h = self.original_image.size
+        nx1, ny1, nx2, ny2 = self.crop_norm
+        
+        left = int(nx1 * w)
+        top = int(ny1 * h)
+        right = int(nx2 * w)
+        bottom = int(ny2 * h)
+        
+        if right > left and bottom > top:
+            # Crop the underlying high-res image
+            self.original_image = self.original_image.crop((left, top, right, bottom))
+            
+            # Also crop the mask and backup image if they exist
+            if self.image_before_bg_removal:
+                self.image_before_bg_removal = self.image_before_bg_removal.crop((left, top, right, bottom))
+            if self.current_mask:
+                self.current_mask = self.current_mask.crop((left, top, right, bottom))
+            
+            # Reset crop bounds to the edges of the new image
+            self.crop_norm = [0.0, 0.0, 1.0, 1.0]
+            self.mask_undo_stack.clear()
+            self.mask_redo_stack.clear()
+            self.update_preview()
 
     def auto_crop_face(self):
         if not self.original_image:
@@ -311,7 +427,10 @@ class PassportPhotoApp(ctk.CTk):
         self.draw_crop_box()
 
     def draw_crop_box(self):
-        if not self.original_image: return
+        self.canvas.delete("crop")
+        
+        if not self.original_image or self.mode != "crop": 
+            return
         
         nx1, ny1, nx2, ny2 = self.crop_norm
         x1 = self.img_x + nx1 * self.img_w
@@ -358,6 +477,9 @@ class PassportPhotoApp(ctk.CTk):
         return nx, ny
 
     def get_action(self, event):
+        if self.mode in ["brush", "eraser"]:
+            return "paint"
+            
         nx, ny = self.get_norm_coords(event.x, event.y)
         nx1, ny1, nx2, ny2 = self.crop_norm
         
@@ -373,15 +495,59 @@ class PassportPhotoApp(ctk.CTk):
         
         return None
 
+    def paint_mask(self, x, y, start_of_stroke=False):
+        nx, ny = self.get_norm_coords(x, y)
+        if not (0 <= nx <= 1 and 0 <= ny <= 1):
+            return
+            
+        img_x = int(nx * self.current_mask.width)
+        img_y = int(ny * self.current_mask.height)
+        
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(self.current_mask)
+        
+        # Scale brush size relative to the preview image size so it matches the cursor visually
+        r_px = int(self.brush_size_slider.get() / self.preview_scale)
+        
+        fill_color = 255 if self.mode == "brush" else 0
+        
+        if start_of_stroke or self.last_paint_x is None:
+            draw.ellipse([img_x - r_px, img_y - r_px, img_x + r_px, img_y + r_px], fill=fill_color)
+        else:
+            # Draw line connecting last point to current point
+            draw.line([(self.last_paint_x, self.last_paint_y), (img_x, img_y)], fill=fill_color, width=r_px*2)
+            # Draw circle at the end to make joins smooth
+            draw.ellipse([img_x - r_px, img_y - r_px, img_x + r_px, img_y + r_px], fill=fill_color)
+            
+        self.last_paint_x = img_x
+        self.last_paint_y = img_y
+        
+        self.apply_mask()
+
     def on_mouse_press(self, event):
         if not self.original_image: return
         self.action = self.get_action(event)
+        
+        if self.action == "paint" and self.current_mask:
+            # Save state for undo
+            if len(self.mask_undo_stack) >= 10:
+                self.mask_undo_stack.pop(0)
+            self.mask_undo_stack.append(self.current_mask.copy())
+            self.mask_redo_stack.clear()
+            
+            self.paint_mask(event.x, event.y, start_of_stroke=True)
+            return
+            
         self.start_x = event.x
         self.start_y = event.y
         self.drag_start_norm = list(self.crop_norm)
 
     def on_mouse_drag(self, event):
         if not self.action or not self.original_image: return
+        
+        if self.action == "paint" and self.current_mask:
+            self.paint_mask(event.x, event.y, start_of_stroke=False)
+            return
         
         dx = (event.x - self.start_x) / self.img_w
         dy = (event.y - self.start_y) / self.img_h
@@ -457,6 +623,8 @@ class PassportPhotoApp(ctk.CTk):
 
     def on_mouse_release(self, event):
         self.action = None
+        self.last_paint_x = None
+        self.last_paint_y = None
 
 if __name__ == "__main__":
     app = PassportPhotoApp()
