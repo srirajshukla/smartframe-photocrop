@@ -1,0 +1,5 @@
+customtkinter
+rembg[u2netp]
+mediapipe
+pillow
+opencv-python

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+build/
+dist/
+*.spec
+
+# AI Models (rembg downloads these automatically to a user folder, but just in case)
+.u2net/
+
+# Project Specific
+*.log
+output/
+temp/
