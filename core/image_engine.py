@@ -2,6 +2,11 @@ import cv2
 import numpy as np
 from PIL import Image, ImageEnhance
 from rembg import remove
+from utils.constants import (
+    FACE_SCALE, FACE_MIN_NEIGHBORS, FACE_MIN_SIZE,
+    SKIN_LOWER, SKIN_UPPER, SKIN_BLUR_KERNEL, SKIN_BOOST,
+    MASK_OVERLAY_RGBA
+)
 
 class ImageEngine:
     @staticmethod
@@ -15,7 +20,12 @@ class ImageEngine:
         cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         face_cascade = cv2.CascadeClassifier(cascade_path)
         
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(100, 100))
+        faces = face_cascade.detectMultiScale(
+            gray, 
+            scaleFactor=FACE_SCALE, 
+            minNeighbors=FACE_MIN_NEIGHBORS, 
+            minSize=FACE_MIN_SIZE
+        )
         
         if len(faces) == 0:
             return None
@@ -57,12 +67,12 @@ class ImageEngine:
         if lightening > 0:
             img_np = np.array(fg)
             img_ycrcb = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
-            lower = np.array([0, 133, 77], dtype=np.uint8)
-            upper = np.array([255, 173, 127], dtype=np.uint8)
+            lower = np.array(SKIN_LOWER, dtype=np.uint8)
+            upper = np.array(SKIN_UPPER, dtype=np.uint8)
             skin_mask = cv2.inRange(img_ycrcb, lower, upper)
-            skin_mask = cv2.GaussianBlur(skin_mask, (7, 7), 0) / 255.0
+            skin_mask = cv2.GaussianBlur(skin_mask, SKIN_BLUR_KERNEL, 0) / 255.0
             
-            boost = 1.0 + (lightening * 0.25)
+            boost = 1.0 + (lightening * SKIN_BOOST)
             img_ycrcb = img_ycrcb.astype(float)
             img_ycrcb[:,:,0] = img_ycrcb[:,:,0] * (1.0 + (boost - 1.0) * skin_mask)
             img_ycrcb[:,:,0] = np.clip(img_ycrcb[:,:,0], 0, 255)
@@ -77,7 +87,7 @@ class ImageEngine:
         # 4. Composition
         if is_editing_mask:
             overlay_bg = base_image.copy().convert("RGBA")
-            red_layer = Image.new("RGBA", overlay_bg.size, (255, 0, 0, 80))
+            red_layer = Image.new("RGBA", overlay_bg.size, MASK_OVERLAY_RGBA)
             overlay_bg = Image.alpha_composite(overlay_bg, red_layer).convert("RGB")
             return Image.composite(fg, overlay_bg, mask)
         else:

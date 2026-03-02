@@ -1,5 +1,8 @@
 from PIL import Image, ImageDraw
-from utils.constants import DPI
+from utils.constants import (
+    DPI, PRINT_SHEET_SIZE, MARGIN_GAP_LARGE, MARGIN_GAP_SMALL,
+    SHEET_OUTLINE
+)
 
 class Exporter:
     @staticmethod
@@ -28,17 +31,18 @@ class Exporter:
     def generate_print_sheet(image, target_w_mm, target_h_mm):
         if not image: return None
         
-        sheet_w, sheet_h = 1800, 1200 # 6x4 at 300 DPI
+        sheet_w, sheet_h = PRINT_SHEET_SIZE
         photo_w = int((target_w_mm / 25.4) * DPI)
         photo_h = int((target_h_mm / 25.4) * DPI)
         
         def calc_fit(sw, sh, pw, ph, m, g):
             return int(max(0, (sw - 2*m + g) // (pw + g))), int(max(0, (sh - 2*m + g) // (ph + g)))
 
-        m, g = (0, 0) if (photo_w >= 600 or photo_h >= 600) else (15, 15)
+        # Use large margins/gaps for small photos, and zero for large ones (e.g. 5x7 on 4x6)
+        m, g = MARGIN_GAP_LARGE if (photo_w < 600 and photo_h < 600) else MARGIN_GAP_SMALL
         
-        c1, r1 = calc_fit(sheet_w, sheet_h, photo_w, photo_h, m, g)
-        c2, r2 = calc_fit(sheet_w, sheet_h, photo_h, photo_w, m, g)
+        c1, r1 = calc_fit(sheet_w, sheet_h, photo_w, photo_h, m[0], g[0])
+        c2, r2 = calc_fit(sheet_w, sheet_h, photo_h, photo_w, m[0], g[0])
         
         use_rotated = (c2 * r2) > (c1 * r1)
         num_cols, num_rows = (c2, r2) if use_rotated else (c1, r1)
@@ -53,14 +57,14 @@ class Exporter:
         sheet = Image.new("RGB", (sheet_w, sheet_h), "WHITE")
         draw = ImageDraw.Draw(sheet)
         
-        grid_w = num_cols * pw + (num_cols - 1) * g
-        grid_h = num_rows * ph + (num_rows - 1) * g
+        grid_w = num_cols * pw + (num_cols - 1) * g[0]
+        grid_h = num_rows * ph + (num_rows - 1) * g[1]
         ox, oy = (sheet_w - grid_w) // 2, (sheet_h - grid_h) // 2
         
         for r in range(num_rows):
             for c in range(num_cols):
-                x, y = ox + c * (pw + g), oy + r * (ph + g)
+                x, y = ox + c * (pw + g[0]), oy + r * (ph + g[1])
                 sheet.paste(photo, (x, y))
-                draw.rectangle([x, y, x + pw, y + ph], outline="#dddddd")
+                draw.rectangle([x, y, x + pw, y + ph], outline=SHEET_OUTLINE)
                 
         return sheet

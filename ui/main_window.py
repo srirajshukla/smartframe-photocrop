@@ -4,7 +4,11 @@ from tkinter import filedialog
 from PIL import Image, ImageDraw
 import numpy as np
 
-from utils.constants import SIZE_PRESETS, BG_COLORS, DEFAULT_GEOMETRY, SEGMENTATION_MODELS
+from utils.constants import (
+    SIZE_PRESETS, BG_COLORS, DEFAULT_GEOMETRY, SEGMENTATION_MODELS,
+    INITIAL_CROP, ACTIVE_COLOR, INACTIVE_COLOR, DPI, PHOTO_QUALITY, SHEET_QUALITY,
+    FACE_CROP_HEIGHT_RATIO, FACE_CROP_OFFSET_RATIO, HANDLE_SIZE
+)
 from core.image_engine import ImageEngine
 from core.exporter import Exporter
 from ui.sidebar import Sidebar
@@ -28,7 +32,7 @@ class PassportPhotoApp(ctk.CTk):
         self.mask_redo_stack = []
         
         self.mode = "crop" # crop, brush, eraser
-        self.crop_norm = [0.25, 0.25, 0.75, 0.75]
+        self.crop_norm = list(INITIAL_CROP)
         
         # UI State for drag/drop
         self.action = None
@@ -113,10 +117,10 @@ class PassportPhotoApp(ctk.CTk):
         fx, fy, fw, fh = bbox
         ratio = self.get_aspect_ratio() or 0.8
         
-        crop_h = fh / 0.55
+        crop_h = fh / FACE_CROP_HEIGHT_RATIO
         crop_w = crop_h * ratio
         
-        cx, cy = fx + fw/2, fy + fh/2 + (crop_h * 0.05)
+        cx, cy = fx + fw/2, fy + fh/2 + (crop_h * FACE_CROP_OFFSET_RATIO)
         nx1, ny1 = max(0, cx - crop_w/2), max(0, cy - crop_h/2)
         nx2, ny2 = min(1, nx1 + crop_w), min(1, ny1 + crop_h)
         
@@ -166,9 +170,8 @@ class PassportPhotoApp(ctk.CTk):
 
     def toggle_mode(self, mode):
         self.mode = "crop" if self.mode == mode else mode
-        active_color = "#1f538d"
-        self.brush_btn.configure(fg_color=active_color if self.mode == "brush" else "gray30")
-        self.eraser_btn.configure(fg_color=active_color if self.mode == "eraser" else "gray30")
+        self.brush_btn.configure(fg_color=ACTIVE_COLOR if self.mode == "brush" else INACTIVE_COLOR)
+        self.eraser_btn.configure(fg_color=ACTIVE_COLOR if self.mode == "eraser" else INACTIVE_COLOR)
         self.canvas.config(cursor="crosshair" if self.mode in ["brush", "eraser"] else "arrow")
         self.apply_mask()
 
@@ -232,7 +235,7 @@ class PassportPhotoApp(ctk.CTk):
         if self.mode in ["brush", "eraser"]: return "paint"
         nx, ny = self.canvas.get_norm(e.x, e.y)
         nx1, ny1, nx2, ny2 = self.crop_norm
-        t = 15 / self.canvas.img_data[2]
+        t = (HANDLE_SIZE * 1.5) / self.canvas.img_data[2]
         if abs(nx-nx1)<t and abs(ny-ny1)<t: return "nw"
         if abs(nx-nx2)<t and abs(ny-ny1)<t: return "ne"
         if abs(nx-nx1)<t and abs(ny-ny2)<t: return "sw"
@@ -285,13 +288,13 @@ class PassportPhotoApp(ctk.CTk):
         path = filedialog.asksaveasfilename(defaultextension=".jpg", initialfile="photo.jpg")
         if path:
             w, h = SIZE_PRESETS.get(self.size_optionemenu.get())
-            Exporter.get_standardized_photo(self.original_image, w, h).save(path, dpi=(300,300), quality=95)
+            Exporter.get_standardized_photo(self.original_image, w, h).save(path, dpi=(DPI,DPI), quality=PHOTO_QUALITY)
 
     def export_print_sheet(self):
         path = filedialog.asksaveasfilename(defaultextension=".jpg", initialfile="sheet.jpg")
         if path:
             w, h = SIZE_PRESETS.get(self.size_optionemenu.get())
-            Exporter.generate_print_sheet(self.original_image, w, h).save(path, dpi=(300,300), quality=98)
+            Exporter.generate_print_sheet(self.original_image, w, h).save(path, dpi=(DPI,DPI), quality=SHEET_QUALITY)
 
 if __name__ == "__main__":
     app = PassportPhotoApp()

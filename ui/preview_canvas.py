@@ -1,12 +1,13 @@
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
 
+from utils.constants import CANVAS_BG, HANDLE_SIZE, CROP_BOX_COLOR
+
 class PreviewCanvas(tk.Canvas):
     def __init__(self, master, app, **kwargs):
-        super().__init__(master, bg="#2b2b2b", highlightthickness=0, **kwargs)
+        super().__init__(master, bg=CANVAS_BG, highlightthickness=0, **kwargs)
         self.app = app
         self.tk_image = None
-        self.handle_size = 10
         
         self.bind("<ButtonPress-1>", self.on_press)
         self.bind("<B1-Motion>", self.on_drag)
@@ -41,10 +42,11 @@ class PreviewCanvas(tk.Canvas):
             self.create_rectangle(ix, y2, ix+iw, iy+ih, fill="black", stipple="gray50", outline="", tags="crop")
             self.create_rectangle(ix, y1, x1, y2, fill="black", stipple="gray50", outline="", tags="crop")
             self.create_rectangle(x2, y1, ix+iw, y2, fill="black", stipple="gray50", outline="", tags="crop")
-            self.create_rectangle(x1, y1, x2, y2, outline="#00a8ff", width=2, tags="crop")
+            self.create_rectangle(x1, y1, x2, y2, outline=CROP_BOX_COLOR, width=2, tags="crop")
             
+            hs = HANDLE_SIZE // 2
             for hx, hy in [(x1,y1), (x2,y1), (x1,y2), (x2,y2)]:
-                self.create_rectangle(hx-5, hy-5, hx+5, hy+5, fill="#00a8ff", outline="white", tags="crop")
+                self.create_rectangle(hx-hs, hy-hs, hx+hs, hy+hs, fill=CROP_BOX_COLOR, outline="white", tags="crop")
 
             if self.app.size_optionemenu.get() == "Custom":
                 cw_px, ch_px = int((nx2-nx1)*w), int((ny2-ny1)*h)
