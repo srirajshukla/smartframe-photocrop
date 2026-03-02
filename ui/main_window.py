@@ -18,7 +18,7 @@ from ui.preview_canvas import PreviewCanvas
 class PassportPhotoApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Passport Photo Creator")
+        self.title("SmartFrame")
         self.geometry(DEFAULT_GEOMETRY)
 
         # Layout

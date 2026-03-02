@@ -12,7 +12,7 @@ class Sidebar(ctk.CTkFrame):
         self.app = app
         
         # Logo/Title
-        self.logo_label = ctk.CTkLabel(self, text="Passport Creator", font=ctk.CTkFont(size=22, weight="bold"))
+        self.logo_label = ctk.CTkLabel(self, text="SmartFrame", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo_label.pack(pady=(20, 15), padx=20)
 
         # Tabview for Workflow
