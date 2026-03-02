@@ -39,7 +39,7 @@ class Exporter:
             return int(max(0, (sw - 2*m + g) // (pw + g))), int(max(0, (sh - 2*m + g) // (ph + g)))
 
         # Use large margins/gaps for small photos, and zero for large ones (e.g. 5x7 on 4x6)
-        m, g = MARGIN_GAP_LARGE if (photo_w < 600 and photo_h < 600) else MARGIN_GAP_SMALL
+        m, g = (MARGIN_GAP_LARGE, MARGIN_GAP_LARGE) if (photo_w < 600 and photo_h < 600) else (MARGIN_GAP_SMALL, MARGIN_GAP_SMALL)
         
         c1, r1 = calc_fit(sheet_w, sheet_h, photo_w, photo_h, m[0], g[0])
         c2, r2 = calc_fit(sheet_w, sheet_h, photo_h, photo_w, m[0], g[0])
