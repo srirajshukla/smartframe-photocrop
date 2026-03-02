@@ -29,6 +29,10 @@ class Sidebar(ctk.CTkFrame):
         self.setup_enhance_tab()
         self.setup_export_tab()
 
+        # Help Button at the bottom
+        self.help_btn = ctk.CTkButton(self, text="Help & Workflow", fg_color="transparent", border_width=1, command=self.app.show_help)
+        self.help_btn.pack(side="bottom", fill="x", padx=20, pady=20)
+
     def setup_setup_tab(self):
         # Frame for grouping
         f = self.tab_setup
@@ -39,12 +43,14 @@ class Sidebar(ctk.CTkFrame):
         self.add_section_label(f, "Format & Size")
         self.app.size_optionemenu = ctk.CTkOptionMenu(f, values=list(SIZE_PRESETS.keys()), command=self.app.on_format_change)
         self.app.size_optionemenu.pack(fill="x", padx=10, pady=10)
-        
-        self.add_section_label(f, "AI Auto-Align")
-        self.add_btn(f, "Magic Auto-Crop", self.app.auto_crop_face, fg_color=SECONDARY_BTN_COLOR)
 
     def setup_bg_tab(self):
         f = self.tab_bg
+
+        self.add_section_label(f, "AI Auto-Align")
+        self.add_btn(f, "Magic Auto-Crop", self.app.auto_crop_face, fg_color=SECONDARY_BTN_COLOR)
+        self.add_btn(f, "Confirm Crop", self.app.confirm_crop, fg_color=SUCCESS_BTN_COLOR)
+
         self.add_section_label(f, "AI Background")
         
         ctk.CTkLabel(f, text="Model Quality:").pack(anchor="w", padx=10, pady=(5,0))
@@ -73,8 +79,6 @@ class Sidebar(ctk.CTkFrame):
         self.add_section_label(f, "New Background")
         self.app.bg_color_optionemenu = ctk.CTkOptionMenu(f, values=list(BG_COLORS.keys()), command=self.app.on_bg_color_change)
         self.app.bg_color_optionemenu.pack(fill="x", padx=10, pady=5)
-        
-        self.add_btn(f, "Confirm All Cuts", self.app.confirm_crop, fg_color=SUCCESS_BTN_COLOR)
 
     def setup_enhance_tab(self):
         # We use a scrollable frame for filters as they are many
@@ -102,11 +106,6 @@ class Sidebar(ctk.CTkFrame):
         self.add_section_label(f, "Final Delivery")
         self.add_btn(f, f"Save Single Photo ({DPI} DPI)", self.app.export_single, fg_color=SUCCESS_BTN_COLOR)
         self.add_btn(f, "Generate 4x6 Print Sheet", self.app.export_print_sheet, fg_color="transparent", border_width=2)
-        
-        info_box = ctk.CTkTextbox(f, height=100, font=("Arial", 11))
-        info_box.pack(fill="x", padx=10, pady=20)
-        info_box.insert("0.0", "HINT:\n1. Use Step 1 to align.\n2. Step 2 to swap BG.\n3. Step 3 to fix colors.\n4. Save for printing!")
-        info_box.configure(state="disabled")
 
     # --- UI HELPERS ---
     def add_section_label(self, master, text):

@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw
 import numpy as np
 
@@ -57,6 +57,20 @@ class PassportPhotoApp(ctk.CTk):
         self.canvas.grid(row=0, column=0, sticky="nsew")
         
         self.preview_frame.bind("<Configure>", self.on_resize)
+
+    # --- HELP ---
+    def show_help(self):
+        help_text = (
+            "Recommended Workflow:\n\n"
+            "1. SETUP: Load your image and rotate if needed.\n\n"
+            "2. BG: Use 'Magic Auto-Crop' to frame the subject. "
+            "Click 'Confirm Crop' once satisfied. "
+            "Then click 'Remove Background'.\n\n"
+            "3. EDIT: Use sliders to adjust brightness, contrast, "
+            "and apply skin smoothing or glow.\n\n"
+            "4. SAVE: Export your final photo or a 4x6 print sheet."
+        )
+        messagebox.showinfo("Help & Workflow", help_text)
 
     # --- IMAGE OPS ---
     def open_image(self):
