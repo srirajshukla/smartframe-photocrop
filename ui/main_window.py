@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw
 import numpy as np
+import threading
 
 from utils.constants import (
     SIZE_PRESETS, BG_COLORS, DEFAULT_GEOMETRY, SEGMENTATION_MODELS,
@@ -92,21 +93,39 @@ class PassportPhotoApp(ctk.CTk):
 
     def remove_background(self):
         if not self.original_image: return
+        
+        # UI feedback
         self.remove_bg_btn.configure(state="disabled", text="Processing...")
-        self.update_idletasks()
-        try:
-            self.image_before_bg_removal = self.original_image.copy()
-            
-            # Get the internal model id from the selected display name
-            model_display_name = self.model_optionemenu.get()
-            model_id = SEGMENTATION_MODELS.get(model_display_name, "u2net")
-            
-            _, self.current_mask = ImageEngine.remove_bg(self.original_image, model_name=model_id)
-            self.apply_mask()
-            # Switch to BG tab for refinement
-            self.sidebar.tabs.set("2. BG")
-        finally:
-            self.remove_bg_btn.configure(state="normal", text="Remove Background")
+        
+        # Get model ID in main thread
+        model_display_name = self.model_optionemenu.get()
+        model_id = SEGMENTATION_MODELS.get(model_display_name, "u2net")
+        
+        # Prepare for background thread
+        source_image = self.original_image.copy()
+        self.image_before_bg_removal = source_image.copy()
+
+        def background_task():
+            try:
+                # Heavy work here
+                _, mask = ImageEngine.remove_bg(source_image, model_name=model_id)
+                # Success: callback to main thread
+                self.after(0, lambda m=mask: self.on_bg_removed(m))
+            except Exception as e:
+                self.after(0, lambda err=e: self.on_bg_error(err))
+
+        threading.Thread(target=background_task, daemon=True).start()
+
+    def on_bg_removed(self, mask):
+        self.current_mask = mask
+        self.remove_bg_btn.configure(state="normal", text="Remove Background")
+        self.apply_mask()
+        # Switch to BG tab for refinement
+        self.sidebar.tabs.set("2. BG")
+
+    def on_bg_error(self, error):
+        self.remove_bg_btn.configure(state="normal", text="Remove Background")
+        messagebox.showerror("Error", f"Failed to remove background: {str(error)}")
 
     def apply_mask(self):
         if self.image_before_bg_removal and self.current_mask:
