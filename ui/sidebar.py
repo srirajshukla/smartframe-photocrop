@@ -94,8 +94,8 @@ class Sidebar(ctk.CTkFrame):
         self.add_slider_grp(f, "Sharpness", "sharpness", "sharpness_slider")
         
         self.add_section_label(f, "Portrait Retouching")
-        self.add_slider_grp(f, "Skin Glow", "skin_glow", "lightening_slider")
-        self.add_slider_grp(f, "Smooth Skin", "smooth_skin", "smoothing_slider")
+        self.add_slider_grp(f, "Subject Lightening", "skin_glow", "lightening_slider")
+        self.add_slider_grp(f, "Blur", "smooth_skin", "smoothing_slider")
 
         # Bottom space
         ctk.CTkLabel(f, text="").pack(pady=10)
