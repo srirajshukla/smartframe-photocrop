@@ -14,11 +14,18 @@ DEFAULT_MODEL_DISPLAY = app_defaults.get("default_model", "Balanced (u2net)")
 INITIAL_CROP = app_defaults.get("initial_crop", [0.25, 0.25, 0.75, 0.75])
 
 # Segmentation Models
-SEGMENTATION_MODELS = {
+SEGMENTATION_MODELS = SETTINGS.get("segmentation_models", {
     "Fast (u2netp)": "u2netp",
     "Balanced (u2net)": "u2net",
-    "High Quality (isnet)": "isnet-general-use"
-}
+    "High Quality (isnet)": "isnet-general-use",
+    "Ultra Quality (BiRefNet)": "birefnet-portrait"
+})
+REMBG_CONFIG = SETTINGS.get("rembg_config", {
+    "alpha_matting": True,
+    "alpha_matting_foreground_threshold": 240,
+    "alpha_matting_background_threshold": 10,
+    "alpha_matting_erode_size": 10
+})
 
 # Face Detection
 FACE_DET_CONFIG = SETTINGS.get("face_detection", {})

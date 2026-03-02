@@ -25,6 +25,18 @@
         "Red": "#FF0000",
         "Tan": "#D2B48C"
     },
+    "segmentation_models": {
+        "Fast (u2netp)": "u2netp",
+        "Balanced (u2net)": "u2net",
+        "High Quality (isnet)": "isnet-general-use",
+        "Ultra Quality (BiRefNet)": "birefnet-portrait"
+    },
+    "rembg_config": {
+        "alpha_matting": true,
+        "alpha_matting_foreground_threshold": 240,
+        "alpha_matting_background_threshold": 10,
+        "alpha_matting_erode_size": 10
+    },
     "app_defaults": {
         "geometry": "1100x700",
         "dpi": 300,

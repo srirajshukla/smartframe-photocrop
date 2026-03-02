@@ -5,7 +5,7 @@ from rembg import remove
 from utils.constants import (
     FACE_SCALE, FACE_MIN_NEIGHBORS, FACE_MIN_SIZE,
     SKIN_LOWER, SKIN_UPPER, SKIN_BLUR_KERNEL, SKIN_BOOST,
-    MASK_OVERLAY_RGBA
+    MASK_OVERLAY_RGBA, REMBG_CONFIG
 )
 
 class ImageEngine:
@@ -40,7 +40,7 @@ class ImageEngine:
         """Removes background using rembg and returns (RGBA image, Alpha mask)."""
         from rembg import new_session
         session = new_session(model_name)
-        output_rgba = remove(pil_image, session=session)
+        output_rgba = remove(pil_image, session=session, **REMBG_CONFIG)
         mask = output_rgba.split()[3]
         return output_rgba, mask
 
