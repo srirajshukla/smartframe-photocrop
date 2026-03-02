@@ -1,6 +1,0 @@
-customtkinter
-rembg[cpu]
-mediapipe
-pillow
-opencv-python
-CTkColorPicker
