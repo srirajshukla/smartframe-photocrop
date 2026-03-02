@@ -128,17 +128,29 @@ class PassportPhotoApp(ctk.CTk):
         bbox = ImageEngine.detect_face(self.original_image)
         if not bbox: return
         
-        fx, fy, fw, fh = bbox
+        img_w, img_h = self.original_image.size
+        fx, fy, fw, fh = bbox # Normalized
+        
+        # Target aspect ratio
         ratio = self.get_aspect_ratio() or 0.8
         
-        crop_h = fh / FACE_CROP_HEIGHT_RATIO
-        crop_w = crop_h * ratio
+        # Calculate crop height in pixels relative to face height in pixels
+        face_h_px = fh * img_h
+        crop_h_px = face_h_px / FACE_CROP_HEIGHT_RATIO
+        crop_w_px = crop_h_px * ratio
         
-        cx, cy = fx + fw/2, fy + fh/2 + (crop_h * FACE_CROP_OFFSET_RATIO)
-        nx1, ny1 = max(0, cx - crop_w/2), max(0, cy - crop_h/2)
-        nx2, ny2 = min(1, nx1 + crop_w), min(1, ny1 + crop_h)
+        # Center of face in normalized coords
+        cx, cy = fx + fw/2, fy + fh/2 + (FACE_CROP_OFFSET_RATIO * (crop_h_px / img_h))
         
-        self.crop_norm = [nx1, ny1, nx2, ny2]
+        # Back to normalized
+        nw = crop_w_px / img_w
+        nh = crop_h_px / img_h
+        
+        nx1, ny1 = cx - nw/2, cy - nh/2
+        nx2, ny2 = nx1 + nw, ny1 + nh
+        
+        # Clamp and adjust to maintain ratio if clamped
+        self.crop_norm = [max(0, nx1), max(0, ny1), min(1, nx2), min(1, ny2)]
         self.update_preview()
 
     def confirm_crop(self):
